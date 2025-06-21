@@ -6,6 +6,7 @@
   <link rel="icon" href="https://spyne-prod-ai.s3.us-east-1.amazonaws.com/ai-dataset/2025/favicon.ico" type="image/x-icon">
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; background: #f4f7fa; margin: 0; padding: 20px; }
     .section { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 15px; margin-bottom: 20px; }
@@ -13,7 +14,8 @@
     table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
     th, td { padding: 8px; border: 1px solid #ddd; text-align: center; }
     th { background: #eee; }
-    #dailyChart { max-width: 100%; height: 300px; }
+    /* Chart container: 2/3 of viewport height */
+    .chart-container { position: relative; width: 100%; height: 66vh; }
   </style>
 </head>
 <body>
@@ -21,8 +23,10 @@
   <div class="section"><h2>Spyne Outsource</h2></div>
 
   <div class="section">
-    <h2>Daily Count Desc Bar</h2>
-    <canvas id="dailyChart"></canvas>
+    <h2>Daily Count Desc Bar (Current Month)</h2>
+    <div class="chart-container">
+      <canvas id="dailyChart"></canvas>
+    </div>
     <div id="daily-summary-table"></div>
   </div>
 
@@ -43,78 +47,83 @@
     function renderTable(elId, data) {
       const cols = Object.keys(data[0]);
       const header = `<thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>`;
-      const body = `<tbody>${data.map(r =>
-        `<tr>${cols.map(c => `<td>${r[c]}</td>`).join('')}</tr>`
-      ).join('')}</tbody>`;
+      const body = `<tbody>${data.map(row => `<tr>${cols.map(c => `<td>${row[c]}</td>`).join('')}</tr>`).join('')}</tbody>`;
       document.getElementById(elId).innerHTML = `<table>${header}${body}</table>`;
     }
 
+    // Load Active Users
     Papa.parse(liveUserURL, {
       download: true, header: true, skipEmptyLines: true,
       complete: res => {
-        if (!res.data.length) return;
-        renderTable('live-user', res.data);
+        if (res.data.length) renderTable('live-user', res.data);
       }
     });
 
+    // Load daily CSV, filter current month, chart + tables
     Papa.parse(dailyDataURL, {
       download: true, header: true, skipEmptyLines: true,
-      complete: res => {
-        const raw = res.data;
+      complete: ({ data: raw }) => {
         if (!raw.length) return;
 
-        const totalsByDate = raw.reduce((acc, row) => {
-          const dt = row.Date;
-          const img = +row.Images || 0;
-          acc[dt] = (acc[dt] || 0) + img;
-          return acc;
-        }, {});
+        const today = new Date(), curM = today.getMonth(), curY = today.getFullYear();
+        const filtered = raw.filter(r => {
+          const d = new Date(r.Date); return d.getMonth() === curM && d.getFullYear() === curY;
+        });
 
+        const totalsByDate = filtered.reduce((a, r) => {
+          a[r.Date] = (a[r.Date] || 0) + (+r.Images || 0);
+          return a;
+        }, {});
         const dates = Object.keys(totalsByDate).sort();
         const counts = dates.map(d => totalsByDate[d]);
 
-        new Chart(document.getElementById('dailyChart').getContext('2d'), {
+        // Chart setup with height and data labels
+        const ctx = document.getElementById('dailyChart').getContext('2d');
+        new Chart(ctx, {
           type: 'bar',
-          data: {
-            labels: dates,
-            datasets: [{
-              label: 'Images per Day',
-              data: counts,
-              backgroundColor: '#4caf50'
-            }]
-          },
+          data: { labels: dates, datasets: [{ data: counts, backgroundColor: '#4caf50' }] },
           options: {
-            scales: {
-              x: { ticks: { autoSkip: false, maxRotation: 90, minRotation: 45 } }
-            },
+            responsive: true,
+            maintainAspectRatio: false,
             plugins: {
-              legend: { display: false }
+              legend: { display: false },
+              datalabels: {
+                anchor: 'end',
+                align: 'start',
+                color: '#000',
+                font: { weight: 'bold' },
+                formatter: val => val
+              }
+            },
+            scales: {
+              x: { ticks: { autoSkip: false, maxRotation: 45, minRotation: 45 }},
+              y: { beginAtZero: true }
             }
-          }
+          },
+          plugins: [ChartDataLabels] // activates labels
         });
 
+        // Daily summary table
         const rows = dates.map(d => ({ Date: d, 'Total Images': totalsByDate[d].toString() }));
         renderTable('daily-summary-table', rows);
 
-        const emails = [...new Set(raw.map(r => r.Editor))];
+        // User pivot section
+        const emails = [...new Set(filtered.map(r => r.Editor))];
         const emailTotals = {};
         emails.forEach(e => {
-          emailTotals[e] = raw
-            .filter(r => r.Editor === e)
-            .reduce((sum, r) => sum + (+r.Images || 0), 0);
+          emailTotals[e] = filtered.filter(r => r.Editor === e).reduce((sum, r) => sum + (+r.Images || 0), 0);
         });
-
-        const header = `<th>Email</th><th>Images</th>` + dates.map(d => `<th>${d}</th>`).join('');
-        const body = emails.map(e => {
-          const cells = `<td>${e}</td><td>${emailTotals[e]}</td>` + dates.map(d => {
-            const rec = raw.find(r => r.Editor === e && r.Date === d);
-            return `<td>${rec ? rec.Images : 0}</td>`;
-          }).join('');
-          return `<tr>${cells}</tr>`;
+        const headerHTML = `<th>Email</th><th>Images</th>${dates.map(d => `<th>${d}</th>`).join('')}`;
+        const bodyHTML = emails.map(e => {
+          const row = `<td>${e}</td><td>${emailTotals[e]}</td>` +
+            dates.map(d => {
+              const rec = filtered.find(r => r.Editor === e && r.Date === d);
+              return `<td>${rec ? rec.Images : 0}</td>`;
+            }).join('');
+          return `<tr>${row}</tr>`;
         }).join('');
-
         document.getElementById('user-data').innerHTML =
-          `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
+          `<table><thead><tr>${headerHTML}</tr></thead><tbody>${bodyHTML}</tbody></table>`;
       }
     });
   </script>
