@@ -12,15 +12,18 @@
     .chart-container { width: 100%; height: 66vh; }
     .section { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 15px; margin-bottom: 20px; }
     .total-box { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { padding: 8px; border: 1px solid #ddd; text-align: center; }
+    th { background: #eee; text-align: center; }
   </style>
 </head>
 <body>
   <div class="section">
-    <h2>Spyne Outsource</h2>
+    <h2 style="text-align:center">Spyne Outsource Dashboard</h2>
   </div>
 
   <div class="section">
-    <h2>Daily Count Desc Bar (Current Month)</h2>
+    <h2 style="text-align:center">Daily Count</h2>
     <div class="total-box" id="total-count"></div>
     <div class="chart-container">
       <canvas id="dailyChart"></canvas>
@@ -28,8 +31,13 @@
   </div>
 
   <div class="section">
-    <h2>Active User</h2>
+    <h2 style="text-align:center">Active User</h2>
     <div id="live-user"></div>
+  </div>
+
+  <div class="section">
+    <h2 style="text-align:center">User Data Date‑wise (Editor vs Date)</h2>
+    <div id="user-data"></div>
   </div>
 
   <script>
@@ -113,6 +121,30 @@
           },
           plugins: [ChartDataLabels]
         });
+
+        // Pivot Table Rendering
+        const emails = [...new Set(filtered.map(r => r.Editor))];
+        const dateHeaders = [...new Set(filtered.map(r => r.Date))].sort((a, b) => new Date(b) - new Date(a));
+        const pivotData = emails.map(email => {
+          const row = { Editor: email };
+          dateHeaders.forEach(date => {
+            const rec = filtered.find(r => r.Editor === email && r.Date === date);
+            row[date] = rec ? rec.Images : '';
+          });
+          return row;
+        });
+        const headerRow = ['Editor', ...dateHeaders];
+        const tableHtml = `
+          <table>
+            <thead><tr>${headerRow.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+            <tbody>
+              ${pivotData.map(row => `
+                <tr>
+                  ${headerRow.map(h => `<td>${row[h] || ''}</td>`).join('')}
+                </tr>`).join('')}
+            </tbody>
+          </table>`;
+        document.getElementById('user-data').innerHTML = tableHtml;
       }
     });
   </script>
