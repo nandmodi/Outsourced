@@ -7,62 +7,61 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f4f7fa;
       margin: 0;
       padding: 20px;
+      background: #f4f7fa;
     }
     .section {
-      border: 2px solid #000;
+      border: 1px solid #ccc;
+      background: #fff;
       padding: 15px;
       margin-bottom: 20px;
-      background: #fff;
+      border-radius: 4px;
     }
-    h2 {
-      text-align: center;
-      margin: 0 0 10px;
-    }
+    h2 { text-align: center; margin-top: 0; }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 10px;
+      margin-bottom: 20px;
     }
     th, td {
+      padding: 8px;
       border: 1px solid #ddd;
-      padding: 6px;
       text-align: center;
     }
     th {
-      background-color: #eaeaea;
+      background: #eee;
     }
     .bar-container {
       display: flex;
       align-items: flex-end;
       justify-content: space-between;
-      height: 150px;
-      margin-top: 20px;
+      height: 200px;
       border-left: 1px solid #333;
       border-bottom: 1px solid #333;
       padding-bottom: 10px;
     }
-    .bar {
+    .bar-wrapper {
       flex: 1;
-      margin: 0 5px;
-      background-color: #4caf50;
-      display: flex;
-      justify-content: center;
-      align-items: bottom;
-      color: white;
+      margin: 0 4px;
+    }
+    .bar {
+      background: #4caf50;
+      text-align: center;
+      color: #fff;
       font-size: 12px;
+      border-radius: 2px 2px 0 0;
     }
     .bar-label {
-      text-align: center;
-      margin-top: 5px;
+      margin-top: 4px;
       font-size: 12px;
+      color: #333;
+      text-align: center;
     }
   </style>
 </head>
 <body>
-  <link rel="icon" href="https://spyne-prod-ai.s3.us-east-1.amazonaws.com/ai-dataset/2025/logo/Spyne-outsource.png" type="image/x-icon">
+  <link rel="icon" href="https://spyne-prod-ai.s3.us-east-1.amazonaws.com/ai-dataset/2025/favicon.ico" type="image/x-icon">
 
   <div class="section" id="header">
     <h2>Spyne Outsource</h2>
@@ -70,7 +69,8 @@
 
   <div class="section" id="dailyCountBar">
     <h2>Daily Count Desc Bar</h2>
-    <div id="daily-data-bar" class="bar-container"></div>
+    <div id="daily-summary-table"></div>
+    <div id="daily-bar-chart" class="bar-container"></div>
   </div>
 
   <div class="section" id="activeUser">
@@ -79,95 +79,80 @@
   </div>
 
   <div class="section" id="userData">
-    <h2>User Data Date wise</h2>
+    <h2>User Data Date‑wise</h2>
     <div id="user-data"></div>
   </div>
 
   <script>
-    const dailyDataURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQkSnj-ldXkXXW21Jg2NIHO4b5B_KPHAJwy3T8_1L0-mPdGu_wrMC43nJb7bcAxXD7-xhNy3pqEZm18/pub?gid=585003148&single=true&output=csv';
-    const liveUserURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQkSnj-ldXkXXW21Jg2NIHO4b5B_KPHAJwy3T8_1L0-mPdGu_wrMC43nJb7bcAxXD7-xhNy3pqEZm18/pub?gid=1885524675&single=true&output=csv';
+    const dailyDataURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQkSnj-ldXkXXW21Jg2NIHO4b5nJb7bcAxXD7-xhNy3pqEZm18/pub?gid=585003148&single=true&output=csv';
+    const liveUserURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQkSnj-ldXkXXW21Jg2NIHO4b5nJb7bcAxXD7-xhNy3pqEZm18/pub?gid=1885524675&single=true&output=csv';
 
-    function renderTable(csvText, containerId) {
-      Papa.parse(csvText, {
-        header: true, skipEmptyLines: true,
-        complete: function(results) {
-          const data = results.data;
-          if (!data || data.length === 0) return;
-          const cols = Object.keys(data[0]);
-          let html = '<table><thead><tr>';
-          cols.forEach(c => html += `<th>${c}</th>`);
-          html += '</tr></thead><tbody>';
-          data.forEach(r => {
-            html += '<tr>';
-            cols.forEach(c => html += `<td>${r[c]||''}</td>`);
-            html += '</tr>';
-          });
-          html += '</tbody></table>';
-          document.getElementById(containerId).innerHTML = html;
-        }
-      });
-    }
-
-    // Render Active Users
+    // 1. Render Active User table
     fetch(liveUserURL)
       .then(r => r.text())
-      .then(csv => renderTable(csv, 'live-user'));
-
-    // Render Daily Bar Chart
-    fetch(dailyDataURL)
-      .then(r => r.text())
-      .then(csv => {
-        Papa.parse(csv, {header: true, skipEmptyLines: true, complete: r => {
-          const data = r.data;
-          if (!data.length) return;
-          const container = document.getElementById('daily-data-bar');
-          const counts = data.map(d => +d.count || 0);
-          const max = Math.max(...counts);
-          data.forEach(d => {
-            const val = +d.count || 0;
-            const pct = max ? (val / max) : 0;
-            const bar = document.createElement('div');
-            bar.className = 'bar';
-            bar.style.height = (pct * 100) + '%';
-            bar.textContent = val;
-            const wrapper = document.createElement('div');
-            wrapper.appendChild(bar);
-            const label = document.createElement('div');
-            label.className = 'bar-label';
-            label.textContent = d.date;
-            wrapper.appendChild(label);
-            container.appendChild(wrapper);
-          });
-        }});
-      });
-
-    // Render User Data Date-wise Pivot
-    fetch(dailyDataURL)
-      .then(r => r.text())
-      .then(csv => {
-        Papa.parse(csv, {
-          header: true, skipEmptyLines: true,
-          complete: function(res) {
-            const data = res.data;
-            if (!data.length) return;
-            const emails = [...new Set(data.map(d => d.email))];
-            const dates = [...new Set(data.map(d => d.date))].sort();
-            let html = '<table><thead><tr><th>Email</th>';
-            dates.forEach(dt => html += `<th>${dt}</th>`);
-            html += '</tr></thead><tbody>';
-            emails.forEach(e => {
-              html += `<tr><td>${e}</td>`;
-              dates.forEach(dt => {
-                const rec = data.find(d => d.email === e && d.date === dt);
-                html += `<td>${rec ? rec.count : 0}</td>`;
-              });
-              html += '</tr>';
-            });
-            html += '</tbody></table>';
-            document.getElementById('user-data').innerHTML = html;
-          }
+      .then(csv => Papa.parse(csv, { header: true, skipEmptyLines: true, complete: res => {
+        const data = res.data;
+        if (!data.length) return;
+        const cols = Object.keys(data[0]);
+        let html = '<table><thead><tr>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+        data.forEach(r => {
+          html += '<tr>' + cols.map(c => `<td>${r[c]}</td>`).join('') + '</tr>';
         });
-      });
+        html += '</tbody></table>';
+        document.getElementById('live-user').innerHTML = html;
+      }}));
+
+    // 2. Daily Count – Aggregation + Table + Bar chart
+    fetch(dailyDataURL)
+      .then(r => r.text())
+      .then(csv => Papa.parse(csv, { header: true, skipEmptyLines: true, complete: res => {
+        const raw = res.data;
+        const totals = raw.reduce((acc, d) => {
+          const date = d.date;
+          const cnt = +d.count || 0;
+          acc[date] = (acc[date] || 0) + cnt;
+          return acc;
+        }, {});
+        const dates = Object.keys(totals).sort();
+        // Table
+        let tbl = '<table><thead><tr><th>Date</th><th>Total Count</th></tr></thead><tbody>';
+        dates.forEach(dt => tbl += `<tr><td>${dt}</td><td>${totals[dt]}</td></tr>`);
+        tbl += '</tbody></table>';
+        document.getElementById('daily-summary-table').innerHTML = tbl;
+        // Bar chart
+        const max = Math.max(...Object.values(totals));
+        const container = document.getElementById('daily-bar-chart');
+        container.innerHTML = '';
+        dates.forEach(dt => {
+          const val = totals[dt];
+          const pct = max ? (val / max) : 0;
+          const wrapper = document.createElement('div');
+          wrapper.className = 'bar-wrapper';
+          wrapper.innerHTML = `<div class="bar" style="height:${pct*100}%">${val}</div><div class="bar-label">${dt}</div>`;
+          container.appendChild(wrapper);
+        });
+      }}));
+
+    // 3. User Data pivot (email × date)
+    fetch(dailyDataURL)
+      .then(r => r.text())
+      .then(csv => Papa.parse(csv, { header: true, skipEmptyLines: true, complete: res => {
+        const data = res.data;
+        if (!data.length) return;
+        const emails = [...new Set(data.map(d => d.email))];
+        const dates = [...new Set(data.map(d => d.date))].sort();
+        let tbl = '<table><thead><tr><th>Email</th>' + dates.map(d => `<th>${d}</th>`).join('') + '</tr></thead><tbody>';
+        emails.forEach(email => {
+          tbl += `<tr><td>${email}</td>`;
+          dates.forEach(dt => {
+            const rec = data.find(d => d.email === email && d.date === dt);
+            tbl += `<td>${rec ? rec.count : 0}</td>`;
+          });
+          tbl += '</tr>';
+        });
+        tbl += '</tbody></table>';
+        document.getElementById('user-data').innerHTML = tbl;
+      }}));
   </script>
 </body>
 </html>
