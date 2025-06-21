@@ -1,63 +1,164 @@
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/datatables.net-dt/css/jquery.dataTables.min.css">
-<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/datatables.net/js/jquery.dataTables.min.js"></script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Spyne Outsource Dashboard</title>
+  <link rel="icon" href="https://spyne-prod-ai.s3.us-east-1.amazonaws.com/ai-dataset/2025/logo/Spyne-outsource.png" type="image/x-icon">
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/datatables.net/js/jquery.dataTables.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/datatables.net-dt/css/jquery.dataTables.min.css">
+  <style>
+    body { font-family: Arial, sans-serif; background: #fff; margin: 0; padding: 20px; }
+    .chart-container { width: 100%; height: 66vh; }
+    .section { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 15px; margin-bottom: 20px; }
+    .total-box { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { padding: 8px; border: 1px solid #ddd; text-align: center; }
+    th { background: #eee; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="section">
+    <h2 style="text-align:center">Spyne Outsource</h2>
+  </div>
 
-<script>
-// Extended Pivot Table with Total Column and Sortable
-Papa.parse(dailyDataURL, {
-  download: true, header: true, skipEmptyLines: true,
-  complete: ({ data }) => {
-    const today = new Date();
-    const cm = today.getMonth();
-    const cy = today.getFullYear();
+  <div class="section">
+    <h2 style="text-align:center">Daily Count Desc Bar (Current Month)</h2>
+    <div class="total-box" id="total-count"></div>
+    <div class="chart-container">
+      <canvas id="dailyChart"></canvas>
+    </div>
+  </div>
 
-    const filtered = data.filter(r => {
-      const d = new Date(r.Date);
-      return d.getMonth() === cm && d.getFullYear() === cy;
+  <div class="section">
+    <h2 style="text-align:center">Active User</h2>
+    <div id="live-user"></div>
+  </div>
+
+  <div class="section">
+    <h2 style="text-align:center">User Data Date‑wise (Editor vs Date)</h2>
+    <div id="user-data"></div>
+  </div>
+
+  <script>
+    const dailyDataURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQkSnj-ldXkXXW21Jg2NIHO4b5B_KPHAJwy3T8_1L0-mPdGu_wrMC43nJb7bcAxXD7-xhNy3pqEZm18/pub?gid=585003148&single=true&output=csv';
+    const liveUserURL  = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQkSnj-ldXkXXW21Jg2NIHO4b5B_KPHAJwy3T8_1L0-mPdGu_wrMC43nJb7bcAxXD7-xhNy3pqEZm18/pub?gid=1885524675&single=true&output=csv';
+
+    function renderTable(elId, data) {
+      const cols = Object.keys(data[0]);
+      const header = `<thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>`;
+      const body = `<tbody>${data.map(row => `<tr>${cols.map(c => `<td>${row[c]}</td>`).join('')}</tr>`).join('')}</tbody>`;
+      document.getElementById(elId).innerHTML = `<table>${header}${body}</table>`;
+    }
+
+    Papa.parse(liveUserURL, {
+      download: true, header: true, skipEmptyLines: true,
+      complete: res => {
+        if (res.data.length) renderTable('live-user', res.data);
+      }
     });
 
-    const totals = {};
-    let grandTotal = 0;
-    filtered.forEach(r => {
-      const count = +r.Images || 0;
-      totals[r.Date] = (totals[r.Date] || 0) + count;
-      grandTotal += count;
-    });
-    document.getElementById('total-count').innerText = `Total Images This Month: ${grandTotal}`;
+    Papa.parse(dailyDataURL, {
+      download: true, header: true, skipEmptyLines: true,
+      complete: ({ data }) => {
+        const today = new Date();
+        const cm = today.getMonth();
+        const cy = today.getFullYear();
 
-    const dateHeaders = [...new Set(filtered.map(r => r.Date))].sort((a, b) => new Date(b) - new Date(a));
-    const emails = [...new Set(filtered.map(r => r.Editor))];
+        const filtered = data.filter(r => {
+          const d = new Date(r.Date);
+          return d.getMonth() === cm && d.getFullYear() === cy;
+        });
 
-    const pivotData = emails.map(email => {
-      let total = 0;
-      const row = { Editor: email };
-      dateHeaders.forEach(date => {
-        const rec = filtered.find(r => r.Editor === email && r.Date === date);
-        const val = rec ? +rec.Images : 0;
-        row[date] = val || '';
-        total += val;
-      });
-      row.Total = total;
-      return row;
-    });
+        const totals = {};
+        let grandTotal = 0;
+        filtered.forEach(r => {
+          const count = +r.Images || 0;
+          totals[r.Date] = (totals[r.Date] || 0) + count;
+          grandTotal += count;
+        });
 
-    const headerRow = ['Editor', ...dateHeaders, 'Total'];
-    let tableHtml = `<table id="pivotTable"><thead><tr>${headerRow.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>`;
-    pivotData.forEach(row => {
-      tableHtml += `<tr>${headerRow.map(h => `<td>${row[h] || ''}</td>`).join('')}</tr>`;
-    });
-    tableHtml += '</tbody></table>';
-    document.getElementById('user-data').innerHTML = tableHtml;
+        document.getElementById('total-count').innerText = `Total Images This Month: ${grandTotal.toLocaleString()}`;
 
-    $(document).ready(function() {
-      $('#pivotTable').DataTable({
-        paging: false,
-        info: false,
-        searching: false,
-        order: [[headerRow.length - 1, 'desc']] // Sort by Total column
-      });
+        const dates = Object.keys(totals).sort((a, b) => new Date(b) - new Date(a));
+        const counts = dates.map(d => totals[d]);
+
+        const ctx = document.getElementById('dailyChart').getContext('2d');
+        new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: dates,
+            datasets: [
+              {
+                label: 'Images',
+                data: counts,
+                backgroundColor: '#42a5f5'
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              datalabels: {
+                anchor: 'end',
+                align: 'top',
+                color: '#000',
+                font: { weight: 'bold', size: 12 },
+                formatter: val => val
+              }
+            },
+            scales: {
+              x: {
+                title: { display: true, text: 'log_date' },
+                ticks: { maxRotation: 45, minRotation: 45 }
+              },
+              y: {
+                beginAtZero: true
+              }
+            }
+          },
+          plugins: [ChartDataLabels]
+        });
+
+        // Pivot Table Rendering with Totals & Sort
+        const emails = [...new Set(filtered.map(r => r.Editor))];
+        const dateHeaders = [...new Set(filtered.map(r => r.Date))].sort((a, b) => new Date(b) - new Date(a));
+        const pivotData = emails.map(email => {
+          let total = 0;
+          const row = { Editor: email };
+          dateHeaders.forEach(date => {
+            const rec = filtered.find(r => r.Editor === email && r.Date === date);
+            const val = rec ? +rec.Images : 0;
+            row[date] = val || '';
+            total += val;
+          });
+          row.Total = total;
+          return row;
+        });
+
+        const headerRow = ['Editor', ...dateHeaders, 'Total'];
+        let tableHtml = `<table id="pivotTable"><thead><tr>${headerRow.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>`;
+        pivotData.forEach(row => {
+          tableHtml += `<tr>${headerRow.map(h => `<td>${row[h] || ''}</td>`).join('')}</tr>`;
+        });
+        tableHtml += '</tbody></table>';
+        document.getElementById('user-data').innerHTML = tableHtml;
+
+        $(document).ready(function() {
+          $('#pivotTable').DataTable({
+            paging: false,
+            info: false,
+            searching: false,
+            order: [[headerRow.length - 1, 'desc']]
+          });
+        });
+      }
     });
-  }
-});
-</script>
+  </script>
+</body>
+</html>
