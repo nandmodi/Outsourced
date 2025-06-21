@@ -11,9 +11,7 @@
     body { font-family: Arial, sans-serif; background: #fff; margin: 0; padding: 20px; }
     .chart-container { width: 100%; height: 66vh; }
     .section { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 15px; margin-bottom: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-    th, td { padding: 8px; border: 1px solid #ddd; text-align: center; }
-    th { background: #eee; }
+    .total-box { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 10px; }
   </style>
 </head>
 <body>
@@ -23,10 +21,10 @@
 
   <div class="section">
     <h2>Daily Count Desc Bar (Current Month)</h2>
+    <div class="total-box" id="total-count"></div>
     <div class="chart-container">
       <canvas id="dailyChart"></canvas>
     </div>
-    <div id="daily-summary-table"></div>
   </div>
 
   <div class="section">
@@ -65,9 +63,14 @@
         });
 
         const totals = {};
+        let grandTotal = 0;
         filtered.forEach(r => {
-          totals[r.Date] = (totals[r.Date] || 0) + (+r.Images || 0);
+          const count = +r.Images || 0;
+          totals[r.Date] = (totals[r.Date] || 0) + count;
+          grandTotal += count;
         });
+
+        document.getElementById('total-count').innerText = `Total Images This Month: ${grandTotal}`;
 
         const dates = Object.keys(totals).sort((a, b) => new Date(b) - new Date(a));
         const counts = dates.map(d => totals[d]);
@@ -110,9 +113,6 @@
           },
           plugins: [ChartDataLabels]
         });
-
-        const summary = dates.map(d => ({ Date: d, 'Total Images': totals[d].toString() }));
-        renderTable('daily-summary-table', summary);
       }
     });
   </script>
